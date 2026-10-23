@@ -4,8 +4,8 @@ uint8_t classifySample(uint16_t bits) {
   uint16_t rightHalf = (RIGHT_MASK & HALF_LOW) ? HALF_LOW : HALF_HIGH;
 
   uint8_t f = 0;
-  if (__builtin_popcount(bits & LEFT_MASK)  >= EDGE_MIN) f |= JUNC_LEFT;
-  if (__builtin_popcount(bits & RIGHT_MASK) >= EDGE_MIN) f |= JUNC_RIGHT;
+  if (__builtin_popcount(bits & LEFT_MASK)  >= EDGE_MIN && __builtin_popcount(bits & leftHalf) >= BAR_MIN) f |= JUNC_LEFT;
+  if (__builtin_popcount(bits & RIGHT_MASK) >= EDGE_MIN && __builtin_popcount(bits & rightHalf) >= BAR_MIN) f |= JUNC_RIGHT;
   if (bits & CENTER_MASK)                                f |= JUNC_STRAIGHT;
   return f;
 }
@@ -69,10 +69,12 @@ Action decideAction(uint8_t flags) {
       return ACT_RIGHT;
 
     case JUNC_LEFT | JUNC_STRAIGHT:           // branch left + straight
-      return (priority == PRIORITY_LEFT) ? ACT_LEFT : ACT_PID;
+      // return (priority == PRIORITY_LEFT) ? ACT_LEFT : ACT_PID;
+      return ACT_LEFT;
 
     case JUNC_RIGHT | JUNC_STRAIGHT:          // branch right + straight
-      return (priority == PRIORITY_RIGHT) ? ACT_RIGHT : ACT_PID;
+      // return (priority == PRIORITY_RIGHT) ? ACT_RIGHT : ACT_PID;
+      return ACT_RIGHT;
 
     case JUNC_LEFT | JUNC_RIGHT:              // T-junction, no straight
       return pri;
@@ -104,26 +106,26 @@ Action decideAction(uint8_t flags) {
 //   return true;                                 // true - Keep looking for line (false if want to stop after turn)
 // }
 
-bool turn(PRIORITY dir, uint32_t timeout) {
+bool turn(PRIORITY dir, uint32_t timeout, uint32_t minMs) {
   int l = (dir == PRIORITY_LEFT) ? -PIVOT_SPEED : PIVOT_SPEED;
   setMotors(l, -l);
 
   uint32_t t0 = millis();
-  uint8_t phase = 1;                                // 1 = leave old line, 2 = find new line
+  bool oldGone = false;                              // the old line has left the center
   while (millis() - t0 < timeout) {
     read_black_line();
-    bool centerOn = bitSensor & CENTER_MASK;
+    uint32_t t = millis() - t0;
 
-    if (phase == 1 && !centerOn) phase = 2;
-    else if (phase == 2 && centerOn) {
-      dbg("T%c ok %lums", dir == PRIORITY_LEFT ? 'L' : 'R', (unsigned long)(millis() - t0));
+    if (!(bitSensor & CENTER_MASK)) oldGone = true;
+    if (oldGone && t >= minMs && sumOnSensor > 0 && sumOnSensor <= 6) {
+      dbg("T%c ok %lums", dir == PRIORITY_LEFT ? 'L' : 'R', (unsigned long)t);
       return true;
     }
     if (digitalRead(BTN_PIN) == LOW) { stopMotors(); return false; }
   }
 
   stopMotors();
-  dbg("T%c TIMEOUT p%d", dir == PRIORITY_LEFT ? 'L' : 'R', phase);
+  dbg("T%c TIMEOUT", dir == PRIORITY_LEFT ? 'L' : 'R');
   return true;
 }
 
@@ -155,9 +157,9 @@ void handleIntersection() {
 
   bool ok = true;
   switch (act) {
-    case ACT_LEFT:  ok = turn(PRIORITY_LEFT,  TURN_TIMEOUT_MS);  break;
-    case ACT_RIGHT: ok = turn(PRIORITY_RIGHT, TURN_TIMEOUT_MS);  break;
-    case ACT_UTURN: ok = turn(PRIORITY_LEFT,  UTURN_TIMEOUT_MS); break;
+    case ACT_LEFT:  ok = turn(PRIORITY_LEFT,  TURN_TIMEOUT_MS, TURN_MIN_MS);  break;
+    case ACT_RIGHT: ok = turn(PRIORITY_RIGHT, TURN_TIMEOUT_MS, TURN_MIN_MS);  break;
+    case ACT_UTURN: ok = turn(PRIORITY_LEFT,  UTURN_TIMEOUT_MS, UTURN_MIN_MS); break;
     case ACT_STOP:  abortRun(); return;
     case ACT_PID:   break;               // just keep following the line
   }

@@ -44,7 +44,7 @@ float previous_error;
 float derivative;
 float center_position = 85;
 
-float p = 3.0;
+float p = 5.0;
 float d = 20.0;
 
 int pidField = 0;
@@ -92,8 +92,8 @@ PRIORITY priorityCursor = PRIORITY_LEFT;  // what's highlighted while in the sub
 
 // ---------- INTERSECTION ----------
 #define SBIT(i)      (1u << (i))
-#define LEFT_MASK    (SBIT(0)  | SBIT(1)  | SBIT(2))      // left end of the bar
-#define RIGHT_MASK   (SBIT(13) | SBIT(14) | SBIT(15))     // right end of the bar
+#define LEFT_MASK    (SBIT(0)  | SBIT(1)  | SBIT(2) | SBIT(3))      // left end of the bar
+#define RIGHT_MASK   (SBIT(12) | SBIT(13) | SBIT(14) | SBIT(15))     // right end of the bar
 
 #define CENTER_MASK  0b0000001111000000   // sensors 6-9
 #define DISABLED_MASK (1u << 7)   // Disable sensor 8 (7th index from left)
@@ -101,8 +101,11 @@ PRIORITY priorityCursor = PRIORITY_LEFT;  // what's highlighted while in the sub
 #define FINISH_MIN   14                   // sensors on = start/finish box
 int ADVANCE_MS =     60;
 
-#define TURN_SPEED   110
-#define PIVOT_SPEED 130          // start here; TURN_SPEED now only sets the creep speed
+int TURN_SPEED  =  150;
+int PIVOT_SPEED  = 170;          // start here; TURN_SPEED now only sets the creep speed
+
+int TURN_MIN_MS  =   140;     // minimum pivot time for a junction turn (about 70 degrees)
+#define UTURN_MIN_MS  300     // minimum pivot time for a dead-end U-turn (about 150 degrees)
 
 #define TURN_TIMEOUT_MS  1500
 #define UTURN_TIMEOUT_MS 2500
@@ -114,12 +117,12 @@ int ADVANCE_MS =     60;
 uint32_t lostSince = 0;
 
 // Change GAP_DRIVE_MS depending on speed
-int GAP_DRIVE_MS    =  60;   // how long to drive straight over a gap before giving up and U-turning
+int GAP_DRIVE_MS    =  0;   // how long to drive straight over a gap before giving up and U-turning
 #define GAP_CENTER_ZONE 30    // last position within +/-30 of center = "ended straight ahead"
 
 #define BAR_MIN 5             // sensors lit on that half of the bar for a real branch
 #define LINE_MAX_WIDTH 4      // most sensors a normal line (even a 45° bend) lights
-#define FREEZE_MAX_MS  120    // (120) max time to hold straight waiting for the edge sensors
+#define FREEZE_MAX_MS  0    // (120) max time to hold straight waiting for the edge sensors
 uint32_t freezeSince = 0;
 
 #define JUNC_LEFT      0x01
@@ -130,6 +133,13 @@ uint32_t freezeSince = 0;
 enum Action { ACT_PID, ACT_LEFT, ACT_RIGHT, ACT_UTURN, ACT_STOP };
 uint32_t lastJunction = 0;
 int junctionCount = 0;       // reset when Run starts, handy for manual cases
+
+#define SIDE_LEFT_MASK   0x001F   // sensors 0-4
+#define SIDE_RIGHT_MASK  0xF800   // sensors 11-15
+int lastTrig = 0;                 // -1 = left, 0 = straight/PID, 1 = right
+
+#define LATCH_HOLD_MS 500
+uint32_t lastSideMs = 0;
 
 void setup() {
   // put your setup code here, to run once:
@@ -182,7 +192,7 @@ void loop() {
     case ST_RUN:
       if (ev == EV_SINGLE) {
         active = !active;
-        if (active) { previous_error = 0; junctionCount = 0; lastJunction = millis(); lostSince = 0; freezeSince = 0; dbgClear(); }
+        if (active) { previous_error = 0; junctionCount = 0; lastJunction = millis(); lostSince = 0; freezeSince = 0; lastTrig = 0; dbgClear(); }
         else stopMotors();
         drawStartStop("RUN");
       }

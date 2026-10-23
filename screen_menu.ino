@@ -109,10 +109,10 @@ void selectPriority(ButtonEvent ev) {
 // PID
 void drawPIDScreen() {
   drawTitle(pidEditing ? "PID  [EDIT]" : "PID");
-  const char* names[5] = {"P", "D", "Gap", "Adv", "Speed"};
+  const char* names[7] = {"P", "D", "Gap", "Adv", "PvtSp", "Speed"};
 
-  for (int i = 0; i < 5; i++) {
-    int y = 13 + i * 10;
+  for (int i = 0; i < 6; i++) {
+    int y = 12 + i * 8;
     bool editingThis = (pidEditing && i == pidField);
 
     if (editingThis) {                                 // inverted row = being edited
@@ -130,6 +130,7 @@ void drawPIDScreen() {
     else if (i == 1) display.print(d, 2);
     else if (i == 2) display.print(GAP_DRIVE_MS);
     else if (i == 3) display.print(ADVANCE_MS);
+    else if (i == 4) display.print(PIVOT_SPEED);
     else display.print(BASE_SPEED);
   }
 
@@ -142,6 +143,7 @@ void adjustPID(int dir) {                  // dir = +1 or -1
   else if (pidField == 1) d = constrain(d + dir * 0.5f, 0.0f, 200.0f);
   else if (pidField == 2) GAP_DRIVE_MS = constrain(GAP_DRIVE_MS + dir * 5, 0, 500);
   else if (pidField == 3) ADVANCE_MS = constrain(ADVANCE_MS + dir * 10, 0, 500);
+  else if (pidField == 4) PIVOT_SPEED = constrain(PIVOT_SPEED + dir * 5, 0, 500);
   else                    BASE_SPEED = constrain(BASE_SPEED + dir * 10, 0, MAX_SPEED);
 }
 
@@ -149,7 +151,7 @@ void selectPID(ButtonEvent ev) {
   if (ev == EV_NONE) return;
 
   if (!pidEditing) {
-    if (ev == EV_SINGLE)      pidField = (pidField + 1) % 5;
+    if (ev == EV_SINGLE)      pidField = (pidField + 1) % 6;
     else if (ev == EV_DOUBLE) pidEditing = true;
   } else {
     if (ev == EV_SINGLE)      adjustPID(+1);
